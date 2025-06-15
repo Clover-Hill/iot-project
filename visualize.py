@@ -17,7 +17,12 @@ MQTT_TOPIC = "smartroom/+/+"
 class DataVisualizer:
     """Real-time data visualization for IoT sensors"""
     def __init__(self):
-        self.mqtt_client = mqtt.Client("visualizer")
+        try:
+            # Try new version (2.0+) with callback API version
+            self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, "visualizer")
+        except AttributeError:
+            # Fall back to old version
+            self.mqtt_client = mqtt.Client("visualizer")
         self.data_buffers = {
             'temperature': deque(maxlen=50),
             'humidity': deque(maxlen=50),

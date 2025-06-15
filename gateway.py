@@ -22,7 +22,12 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 class IoTGateway:
     """Central gateway for IoT data processing and routing"""
     def __init__(self):
-        self.mqtt_client = mqtt.Client("gateway_main")
+        try:
+            # Try new version (2.0+) with callback API version
+            self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, "gateway_main")
+        except AttributeError:
+            # Fall back to old version
+            self.mqtt_client = mqtt.Client("gateway_main")
         self.sensor_data = defaultdict(dict)
         self.actuator_states = defaultdict(dict)
         self.data_history = defaultdict(lambda: deque(maxlen=100))

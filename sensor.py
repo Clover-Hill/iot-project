@@ -19,7 +19,12 @@ class Sensor:
         self.min_val = min_val
         self.max_val = max_val
         self.current_value = (min_val + max_val) / 2
-        self.mqtt_client = mqtt.Client(f"{sensor_type}_{sensor_id}")
+        try:
+            # Try new version (2.0+) with callback API version
+            self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, f"{sensor_type}_{sensor_id}")
+        except AttributeError:
+            # Fall back to old version
+            self.mqtt_client = mqtt.Client(f"{sensor_type}_{sensor_id}")
         self.running = False
         
     def connect_mqtt(self):

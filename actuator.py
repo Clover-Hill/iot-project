@@ -17,7 +17,12 @@ class Actuator:
         self.actuator_id = actuator_id
         self.actuator_type = actuator_type
         self.state = "OFF"
-        self.mqtt_client = mqtt.Client(f"{actuator_type}_{actuator_id}")
+        try:
+            # Try new version (2.0+) with callback API version
+            self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, f"{actuator_type}_{actuator_id}")
+        except AttributeError:
+            # Fall back to old version
+            self.mqtt_client = mqtt.Client(f"{actuator_type}_{actuator_id}")
         self.sensor_data = {}
         self.running = False
         
