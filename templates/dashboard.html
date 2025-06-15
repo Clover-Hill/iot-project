@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Study Room Dashboard</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f1e;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            padding: 30px 0;
+            text-align: center;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            color: #b0b0b0;
+            margin-top: 10px;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: #1a1a2e;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .sensor-card {
+            border-left: 4px solid #4a90e2;
+        }
+        
+        .actuator-card {
+            border-left: 4px solid #e94b3c;
+        }
+        
+        .card h3 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #4a90e2;
+        }
+        
+        .sensor-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #fff;
+            margin: 10px 0;
+        }
+        
+        .sensor-unit {
+            font-size: 0.8em;
+            color: #888;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-on { background: #4caf50; }
+        .status-off { background: #666; }
+        .status-alert { background: #ff9800; }
+        .status-error { background: #f44336; }
+        
+        .chart-container {
+            background: #1a1a2e;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .notifications {
+            background: #1a1a2e;
+            border-radius: 15px;
+            padding: 25px;
+            max-height: 300px;
+            overflow-y: auto;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .notification {
+            background: #2a2a3e;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #4a90e2;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .notification.alert {
+            border-left-color: #ff9800;
+        }
+        
+        .notification.error {
+            border-left-color: #f44336;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .control-button {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            margin-right: 10px;
+        }
+        
+        .control-button:hover {
+            background: #357abd;
+        }
+        
+        .control-button.off {
+            background: #666;
+        }
+        
+        .analytics-section {
+            margin-top: 30px;
+        }
+        
+        .comfort-score {
+            font-size: 3em;
+            font-weight: bold;
+            text-align: center;
+            color: #4caf50;
+        }
+        
+        .recommendations {
+            background: #2a2a3e;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .recommendation-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #1a1a2e;
+            border-radius: 5px;
+            border-left: 3px solid #4a90e2;
+        }
+        
+        canvas {
+            max-height: 300px;
+        }
+        
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4a90e2;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏠 Smart Study Room</h1>
+            <p class="subtitle">Real-time Environmental Monitoring & Control</p>
+        </header>
+        
+        <!-- Sensor Cards -->
+        <div class="dashboard-grid" id="sensors-grid">
+            <!-- Dynamically populated -->
+        </div>
+        
+        <!-- Actuator Cards -->
+        <div class="dashboard-grid" id="actuators-grid">
+            <!-- Dynamically populated -->
+        </div>
+        
+        <!-- Charts -->
+        <div class="chart-container">
+            <h3>Sensor Trends</h3>
+            <canvas id="trendsChart"></canvas>
+        </div>
+        
+        <!-- Analytics Section -->
+        <div class="analytics-section">
+            <div class="card">
+                <h3>Comfort Score</h3>
+                <div class="comfort-score" id="comfort-score">--</div>
+                <div class="recommendations" id="recommendations">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Notifications -->
+        <div class="notifications">
+            <h3>Notifications</h3>
+            <div id="notifications-list">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Socket.IO connection
+        const socket = io();
+        
+        // Chart setup
+        const ctx = document.getElementById('trendsChart').getContext('2d');
+        const trendsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: []
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#e0e0e0'
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#888' },
+                        grid: { color: '#333' }
+                    },
+                    y: {
+                        ticks: { color: '#888' },
+                        grid: { color: '#333' }
+                    }
+                }
+            }
+        });
+        
+        // Data storage
+        let sensorData = {};
+        let actuatorStates = {};
+        let notifications = [];
+        
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('Connected to gateway');
+        });
+        
+        socket.on('initial_data', (data) => {
+            console.log('Received initial data:', data);
+            updateDashboard(data);
+        });
+        
+        socket.on('update', (update) => {
+            console.log('Received update:', update);
+            
+            if (update.category === 'sensors') {
+                updateSensorCard(update.type, update.data);
+                updateChart(update.type, update.data);
+            } else if (update.category === 'actuators') {
+                updateActuatorCard(update.type, update.data);
+                
+                if (update.type.includes('notification')) {
+                    addNotification(update.data);
+                }
+            }
+        });
+        
+        socket.on('alert', (alert) => {
+            addNotification(alert);
+        });
+        
+        // Update functions
+        function updateDashboard(data) {
+            // Update sensors
+            if (data.sensors) {
+                Object.entries(data.sensors).forEach(([type, sensorData]) => {
+                    updateSensorCard(type, sensorData);
+                });
+            }
+            
+            // Update actuators
+            if (data.actuators) {
+                Object.entries(data.actuators).forEach(([type, actuatorData]) => {
+                    updateActuatorCard(type, actuatorData);
+                });
+            }
+            
+            // Update notifications
+            if (data.notifications) {
+                data.notifications.forEach(notification => {
+                    addNotification(notification);
+                });
+            }
+            
+            // Load analytics
+            loadAnalytics();
+        }
+        
+        function updateSensorCard(type, data) {
+            let card = document.getElementById(`sensor-${type}`);
+            
+            if (!card) {
+                // Create new card
+                card = document.createElement('div');
+                card.id = `sensor-${type}`;
+                card.className = 'card sensor-card';
+                
+                const icon = getSensorIcon(type);
+                card.innerHTML = `
+                    <h3>${icon} ${capitalizeFirst(type)}</h3>
+                    <div class="sensor-value">
+                        <span id="value-${type}">--</span>
+                        <span class="sensor-unit">${data.unit || ''}</span>
+                    </div>
+                    <small>Last update: <span id="time-${type}">--</span></small>
+                `;
+                
+                document.getElementById('sensors-grid').appendChild(card);
+            }
+            
+            // Update values
+            document.getElementById(`value-${type}`).textContent = data.value;
+            document.getElementById(`time-${type}`).textContent = 
+                new Date(data.timestamp).toLocaleTimeString();
+            
+            sensorData[type] = data;
+        }
+        
+        function updateActuatorCard(type, data) {
+            let card = document.getElementById(`actuator-${type}`);
+            
+            if (!card) {
+                // Create new card
+                card = document.createElement('div');
+                card.id = `actuator-${type}`;
+                card.className = 'card actuator-card';
+                
+                const icon = getActuatorIcon(type);
+                card.innerHTML = `
+                    <h3>${icon} ${capitalizeFirst(type.replace('_', ' '))}</h3>
+                    <div class="actuator-status">
+                        <span class="status-indicator" id="status-${type}"></span>
+                        <span id="state-${type}">--</span>
+                    </div>
+                    <div class="actuator-controls" id="controls-${type}">
+                        <!-- Controls added based on type -->
+                    </div>
+                `;
+                
+                document.getElementById('actuators-grid').appendChild(card);
+                
+                // Add controls based on type
+                addActuatorControls(type, card);
+            }
+            
+            // Update status
+            const statusElement = document.getElementById(`status-${type}`);
+            const stateElement = document.getElementById(`state-${type}`);
+            
+            if (data.state === 'ON' || data.state === 'ACTIVE') {
+                statusElement.className = 'status-indicator status-on';
+            } else if (data.state === 'ALERT' || data.state === 'NOISY') {
+                statusElement.className = 'status-indicator status-alert';
+            } else {
+                statusElement.className = 'status-indicator status-off';
+            }
+            
+            stateElement.textContent = data.state;
+            
+            // Update specific actuator info
+            if (type === 'smart_light' && data.brightness !== undefined) {
+                stateElement.textContent += ` (${data.brightness}%)`;
+            }
+            
+            actuatorStates[type] = data;
+        }
+        
+        function updateChart(type, data) {
+            // Update chart with latest sensor data
+            const dataset = trendsChart.data.datasets.find(d => d.label === capitalizeFirst(type));
+            
+            if (!dataset) {
+                // Add new dataset
+                const color = getChartColor(trendsChart.data.datasets.length);
+                trendsChart.data.datasets.push({
+                    label: capitalizeFirst(type),
+                    data: [],
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    tension: 0.1
+                });
+            }
+            
+            // Add new data point
+            const datasetIndex = trendsChart.data.datasets.findIndex(d => d.label === capitalizeFirst(type));
+            const timestamp = new Date(data.timestamp).toLocaleTimeString();
+            
+            // Keep only last 20 points
+            if (trendsChart.data.labels.length >= 20) {
+                trendsChart.data.labels.shift();
+                trendsChart.data.datasets.forEach(d => d.data.shift());
+            }
+            
+            if (!trendsChart.data.labels.includes(timestamp)) {
+                trendsChart.data.labels.push(timestamp);
+            }
+            
+            trendsChart.data.datasets[datasetIndex].data.push(data.value);
+            trendsChart.update();
+        }
+        
+        function addNotification(notification) {
+            const notificationsList = document.getElementById('notifications-list');
+            
+            const notifElement = document.createElement('div');
+            notifElement.className = 'notification';
+            
+            if (notification.severity === 'alert' || notification.type === 'alert') {
+                notifElement.className += ' alert';
+            }
+            
+            const time = new Date(notification.timestamp).toLocaleTimeString();
+            notifElement.innerHTML = `
+                <strong>${time}</strong><br>
+                ${notification.message}
+            `;
+            
+            notificationsList.insertBefore(notifElement, notificationsList.firstChild);
+            
+            // Keep only last 10 notifications
+            while (notificationsList.children.length > 10) {
+                notificationsList.removeChild(notificationsList.lastChild);
+            }
+        }
+        
+        function addActuatorControls(type, card) {
+            const controlsDiv = document.getElementById(`controls-${type}`);
+            
+            if (type === 'smart_light') {
+                controlsDiv.innerHTML = `
+                    <button class="control-button" onclick="toggleLight()">Toggle Light</button>
+                    <button class="control-button" onclick="setAutoMode('smart_light', true)">Auto Mode</button>
+                `;
+            } else if (type === 'climate_control') {
+                controlsDiv.innerHTML = `
+                    <button class="control-button" onclick="setClimateMode('COOL')">Cool</button>
+                    <button class="control-button" onclick="setClimateMode('HEAT')">Heat</button>
+                    <button class="control-button" onclick="setClimateMode('AUTO')">Auto</button>
+                `;
+            }
+        }
+        
+        // Control functions
+        function toggleLight() {
+            const currentState = actuatorStates.smart_light?.state || 'OFF';
+            const newState = currentState === 'ON' ? 'OFF' : 'ON';
+            
+            socket.emit('send_command', {
+                actuator_type: 'smart_light',
+                command: {
+                    actuator_id: 'light_01',
+                    state: newState
+                }
+            });
+        }
+        
+        function setAutoMode(actuatorType, autoMode) {
+            socket.emit('send_command', {
+                actuator_type: actuatorType,
+                command: {
+                    actuator_id: actuatorType + '_01',
+                    auto_mode: autoMode
+                }
+            });
+        }
+        
+        function setClimateMode(mode) {
+            socket.emit('send_command', {
+                actuator_type: 'climate_control',
+                command: {
+                    actuator_id: 'climate_01',
+                    mode: mode
+                }
+            });
+        }
+        
+        // Load analytics
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/api/analytics');
+                const analytics = await response.json();
+                
+                // Update comfort score
+                document.getElementById('comfort-score').textContent = 
+                    analytics.comfort_score + '%';
+                
+                // Update recommendations
+                const recommendationsDiv = document.getElementById('recommendations');
+                recommendationsDiv.innerHTML = '<h4>Recommendations:</h4>';
+                
+                if (analytics.recommendations && analytics.recommendations.length > 0) {
+                    analytics.recommendations.forEach(rec => {
+                        const recElement = document.createElement('div');
+                        recElement.className = 'recommendation-item';
+                        recElement.textContent = rec;
+                        recommendationsDiv.appendChild(recElement);
+                    });
+                } else {
+                    recommendationsDiv.innerHTML += '<p>All conditions are optimal!</p>';
+                }
+            } catch (error) {
+                console.error('Failed to load analytics:', error);
+            }
+        }
+        
+        // Helper functions
+        function capitalizeFirst(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+        
+        function getSensorIcon(type) {
+            const icons = {
+                temperature: '🌡️',
+                humidity: '💧',
+                light: '💡',
+                noise: '🔊',
+                motion: '👁️'
+            };
+            return icons[type] || '📊';
+        }
+        
+        function getActuatorIcon(type) {
+            const icons = {
+                smart_light: '💡',
+                climate_control: '🌡️',
+                focus_mode: '🎯',
+                notification_system: '🔔'
+            };
+            return icons[type] || '⚙️';
+        }
+        
+        function getChartColor(index) {
+            const colors = [
+                '#4a90e2',
+                '#e94b3c',
+                '#4caf50',
+                '#ff9800',
+                '#9c27b0'
+            ];
+            return colors[index % colors.length];
+        }
+        
+        // Refresh analytics every 30 seconds
+        setInterval(loadAnalytics, 30000);
+    </script>
+</body>
+</html>
